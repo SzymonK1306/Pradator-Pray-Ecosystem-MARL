@@ -2,9 +2,10 @@ from pettingzoo.utils.env import ParallelEnv
 from pettingzoo.utils import wrappers
 import numpy as np
 import random
+from agent import Agent
 
 class PredatorPreyEnv(ParallelEnv):
-    def __init__(self, grid_size=(10, 10), num_predators=2, num_prey=3, num_walls=5, predator_scope=2):
+    def __init__(self, grid_size=(10, 10), num_predators=2, num_prey=3, num_walls=5, predator_scope=2, health_gained=0.3):
         """
         Initializes the environment.
         grid_size: Tuple[int, int] - dimensions of the grid.
@@ -12,22 +13,22 @@ class PredatorPreyEnv(ParallelEnv):
         num_prey: int - number of prey agents.
         num_walls: int - number of wall elements.
         predator_scope: int - range of predator, where prays are killed
+        health_gained: float - value of health restored with killing a prey
         """
         self.grid_size = grid_size
         self.num_predators = num_predators
         self.num_prey = num_prey
         self.num_walls = num_walls
         self.predator_scope = predator_scope
+        self.health_gained = health_gained
 
-        self.agents = [f"predator_{i}" for i in range(num_predators)] + [f"prey_{i}" for i in range(num_prey)]
-        self.agent_positions = {agent: None for agent in self.agents}
-        self.agent_health = {agent: 1 for agent in self.agents}
+        self.agents = []
+        # self.agent_positions = {agent: None for agent in self.agents}
+        # self.agent_health = {agent: 1 for agent in self.agents}
         self.walls_positions = []
 
         # Initialize the grid
         self.grid = np.zeros(self.grid_size, dtype=int)
-
-        self.action_space = {agent: 5 for agent in self.agents}  # Actions: 0=stay, 1=up, 2=down, 3=left, 4=right
 
         # self.reset()
 
@@ -45,27 +46,38 @@ class PredatorPreyEnv(ParallelEnv):
                     self.walls_positions.append((x, y))
                     break
 
-        # Place predators and prey
-        for agent in self.agents:
+        # Create and place predators
+        for i in range(self.num_predators):
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
-                    if "predator" in agent:
-                        self.grid[x, y] = 2  # Predator
-                    else:
-                        self.grid[x, y] = 1  # Prey
-                    self.agent_positions[agent] = (x, y)
+                    predator = Agent(f"pr_{i}", "predator", (x, y))
+                    self.agents.append(predator)
+                    self.grid[x, y] = 2  # Predator
+                    break
+
+        # Create and place prey
+        for i in range(self.num_prey):
+            while True:
+                x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
+                if self.grid[x, y] == 0:
+                    prey = Agent(f"py_{i}", "prey", (x, y))
+                    self.agents.append(prey)
+                    self.grid[x, y] = 1  # Prey
                     break
 
         return {agent: self.get_observation(agent) for agent in self.agents}
 
-    def agents_move(self, actions):
+    def agents_move(self):
         """Make a move of each agent"""
         new_positions = {}
 
-        for agent, action in actions.items():
-            x, y = self.agent_positions[agent]
+        for agent in self.agents:
+            x, y = agent.get_position()
             new_x, new_y = x, y
+
+            # random actions for now
+            action = agent.get_random_action()
 
             if action == 1:  # up
                 new_x = (x - 1) % self.grid_size[0]
@@ -77,26 +89,27 @@ class PredatorPreyEnv(ParallelEnv):
                 new_y = (y + 1) % self.grid_size[1]
 
             if self.grid[new_x, new_y] == 0:  # Move if the cell is empty
-                new_positions[agent] = (new_x, new_y)
+                new_positions[agent.id] = (new_x, new_y)
             else:  # Stay in place if the cell is occupied
-                new_positions[agent] = (x, y)
+                new_positions[agent.id] = (x, y)
 
         # Update grid and agent positions
         self.grid.fill(0)
         for wall in self.walls_positions:
             self.grid[wall[0], wall[1]] = -1
 
-        for agent, (x, y) in new_positions.items():
-            if "predator" in agent:
+        for agent in self.agents:
+            x, y = new_positions[agent.id]
+            if "predator" in agent.role:
                 self.grid[x, y] = 2
             else:
                 self.grid[x, y] = 1
-            self.agent_positions[agent] = (x, y)
+            agent.set_position((x, y))
 
     def hunting(self, rewards):
         """Handle predator prey interaction - hunting"""
-        for predator in [a for a in self.agents if "predator" in a]:
-            px, py = self.agent_positions[predator]
+        for predator in [a for a in self.agents if "predator" in a.role]:
+            px, py = predator.get_position()
             prey_in_scope = []
 
             for dx in range(-self.predator_scope, self.predator_scope + 1):
@@ -112,28 +125,28 @@ class PredatorPreyEnv(ParallelEnv):
                 # Kill the nearest prey
                 prey_in_scope.sort()
                 target_prey_pos = prey_in_scope[0][1]
-                for prey, pos in self.agent_positions.items():
+                for prey in self.agents:
+                    pos = prey.get_position()
                     if pos == target_prey_pos:
-                        del self.agent_positions[prey]
                         self.agents.remove(prey)
                         self.grid[target_prey_pos[0], target_prey_pos[1]] = 0
-                        rewards[predator] += 1  # Reward for eating prey
-                        self.agent_health[predator] += 0.3  # Add constant value
-                        print(f'{prey} killed')
+                        # TODO Reward system needs more thoughts
+                        # rewards[predator] += 1  # Reward for eating prey
+                        predator.add_health(self.health_gained)  # Add constant value
+                        print(f'{prey.id} killed')
                         break
 
         return rewards
 
     def predator_hunger(self):
         """Decrease predator health and remove dead predators"""
-        for predator in [a for a in self.agents if "predator" in a]:
-            self.agent_health[predator] -= 0.01
-            if self.agent_health[predator] <= 0:
-                px, py = self.agent_positions[predator]
-                del self.agent_positions[predator]
+        for predator in [a for a in self.agents if "predator" in a.role]:
+            predator.add_health(-0.01)
+            if predator.health <= 0:
+                px, py = predator.get_position()
                 self.agents.remove(predator)
                 self.grid[px, py] = 0
-                print(f'{predator} killed')
+                print(f'{predator.id} killed')
 
     def generate_new_agents(self, p_predator=0.1, p_prey=0.1):
         """
@@ -150,33 +163,29 @@ class PredatorPreyEnv(ParallelEnv):
 
         # Add new predators
         for _ in range(new_predators):
-            predator_name = f"predator_{len([a for a in self.agents if 'predator' in a])}"
-            self.agents.append(predator_name)
-            self.agent_health[predator_name] = 10  # Initialize health
+            predator_id = f"pr_{len([a for a in self.agents if 'predator' in a.role])}"
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:  # Empty cell
                     self.grid[x, y] = 2  # Predator
-                    self.agent_positions[predator_name] = (x, y)
+                    self.agents.append(Agent(predator_id, 'predator', (x, y)))
                     break
 
         # Add new preys
         for _ in range(new_prey):
-            prey_name = f"prey_{len([a for a in self.agents if 'prey' in a])}"
-            self.agents.append(prey_name)
-            self.agent_health[prey_name] = None  # Prey does not have health
+            pray_id = f"py_{len([a for a in self.agents if 'prey' in a.role])}"
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:  # Empty cell
                     self.grid[x, y] = 1  # Prey
-                    self.agent_positions[prey_name] = (x, y)
+                    self.agents.append(Agent(pray_id, 'pray', (x, y)))
                     break
 
-    def step(self, actions):
+    def step(self):
         """Takes a step in the environment based on the actions and environment rules."""
-        rewards = {agent: 0 for agent in self.agents}
+        rewards = {}    # TODO think about reward system implementation
 
-        self.agents_move(actions)
+        self.agents_move()
 
         rewards = self.hunting(rewards)
 
@@ -191,7 +200,7 @@ class PredatorPreyEnv(ParallelEnv):
 
     def get_observation(self, agent):
         """Returns a 4-channel local grid observation for the given agent."""
-        ax, ay = self.agent_positions[agent]
+        ax, ay = agent.get_position()
         size = self.predator_scope * 2 + 1
 
         wall_layer = np.zeros((size, size), dtype=int)
@@ -211,9 +220,10 @@ class PredatorPreyEnv(ParallelEnv):
                 elif self.grid[nx, ny] == 1:
                     prey_layer[local_x, local_y] = 1
 
-                for a, (px, py) in self.agent_positions.items():
-                    if (px, py) == (nx, ny) and a in self.agent_health and self.agent_health[a] is not None:
-                        health_layer[local_x, local_y] = self.agent_health[a]
+                for a in self.agents:
+                    px, py = a.get_position()
+                    if (px, py) == (nx, ny):
+                        health_layer[local_x, local_y] = a.health
 
         return np.stack([wall_layer, predator_layer, prey_layer, health_layer], axis=0)
 
@@ -242,7 +252,7 @@ if __name__ == "__main__":
 
     for i in range(20):
         actions = {agent: random.randint(0, 4) for agent in env.agents}
-        obs, rewards = env.step(actions)
+        obs, rewards = env.step()
         env.render()
 
 # TODO Implement learning algorithm
