@@ -105,18 +105,20 @@ class PredatorPreyEnv(ParallelEnv):
                         continue
                     nx, ny = (px + dx) % self.grid_size[0], (py + dy) % self.grid_size[1]
                     if self.grid[nx, ny] == 1:
-                        prey_in_scope.append((nx, ny))
+                        distance = abs(dx) + abs(dy)  # Manhattan
+                        prey_in_scope.append((distance, (nx, ny)))
 
             if prey_in_scope:
-                # Kill the nearest prey (or the first one found in scope for simplicity)
-                target_prey_pos = prey_in_scope[0]
+                # Kill the nearest prey
+                prey_in_scope.sort()
+                target_prey_pos = prey_in_scope[0][1]
                 for prey, pos in self.agent_positions.items():
                     if pos == target_prey_pos:
                         del self.agent_positions[prey]
                         self.agents.remove(prey)
                         self.grid[target_prey_pos[0], target_prey_pos[1]] = 0
                         rewards[predator] += 1  # Reward for eating prey
-                        self.agent_health[predator] = 1  # Refill heath
+                        self.agent_health[predator] += 0.3  # Add constant value
                         print(f'{prey} killed')
                         break
 
