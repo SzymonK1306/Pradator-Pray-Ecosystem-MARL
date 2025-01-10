@@ -160,11 +160,11 @@ class PredatorPreyEnv(ParallelEnv):
         p_prey: float - probability factor for generating new prey.
         """
         # Calculate the number of new predators and prey
-        num_predators = len([a for a in self.agents if "predator" in a])
-        num_prey = len([a for a in self.agents if "prey" in a])
+        num_predators = len([a for a in self.agents if "predator" in a.role])
+        num_prey = len([a for a in self.agents if "prey" in a.role])
 
-        new_predators = min(1, int(num_predators * p_predator))
-        new_prey = min(1, int(num_prey * p_prey))
+        new_predators = max(1, int(num_predators * p_predator))
+        new_prey = max(1, int(num_prey * p_prey))
 
         # Add new predators
         for _ in range(new_predators):
