@@ -1,10 +1,11 @@
+import sys
+import unittest
 from pettingzoo.utils.env import ParallelEnv
 from pettingzoo.utils import wrappers
 import numpy as np
 import random
-from agent import Agent
 
-import json
+from agent import Agent
 
 class PredatorPreyEnv(ParallelEnv):
     def __init__(self, grid_size=(15, 15), num_predators=2, num_prey=3, num_walls=5, predator_scope=2, health_gained=0.3):
@@ -250,8 +251,28 @@ def env_creator():
     env = PredatorPreyEnv()
     return env
 
+RUN_TESTS_BEFORE = True 
+
+def run_tests():
+    print("Running tests...")
+    
+    test_suite = unittest.defaultTestLoader.discover(start_dir='.', pattern='test_*.py')
+    test_runner = unittest.TextTestRunner()
+    result = test_runner.run(test_suite)
+
+    if not result.wasSuccessful():
+        print("Tests failed! The program will be terminated...")
+        sys.exit(1)
+    else:
+        print("All tests passed! Proceeding to main program...")
+
 # Example usage
 if __name__ == "__main__":
+    if RUN_TESTS_BEFORE:
+        run_tests() 
+    else:
+        print("WARNING: running without tests...")    
+    
     env = env_creator()
     obs = env.reset()
     env.render()
