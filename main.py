@@ -12,7 +12,7 @@ class PredatorPreyEnv(ParallelEnv):
         num_predators: int - number of predator agents.
         num_prey: int - number of prey agents.
         num_walls: int - number of wall elements.
-        predator_scope: int - range of predator, where prays are killed
+        predator_scope: int - range of predator, where preys are killed
         health_gained: float - value of health restored with killing a prey
         """
         self.grid_size = grid_size
@@ -131,7 +131,8 @@ class PredatorPreyEnv(ParallelEnv):
                         self.agents.remove(prey)
                         self.grid[target_prey_pos[0], target_prey_pos[1]] = 0
                         # TODO Reward system needs more thoughts
-                        # rewards[predator] += 1  # Reward for eating prey
+                        # rewards[predator.id] += 1  # Reward for eating prey
+                        # rewards[prey.id] += 1
                         predator.add_health(self.health_gained)  # Add constant value
                         print(f'{prey.id} killed')
                         break
@@ -173,12 +174,12 @@ class PredatorPreyEnv(ParallelEnv):
 
         # Add new preys
         for _ in range(new_prey):
-            pray_id = f"py_{len([a for a in self.agents if 'prey' in a.role])}"
+            prey_id = f"py_{len([a for a in self.agents if 'prey' in a.role])}"
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:  # Empty cell
                     self.grid[x, y] = 1  # Prey
-                    self.agents.append(Agent(pray_id, 'pray', (x, y)))
+                    self.agents.append(Agent(prey_id, 'prey', (x, y)))
                     break
 
     def step(self):
