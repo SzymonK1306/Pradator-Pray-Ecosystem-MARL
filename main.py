@@ -4,6 +4,8 @@ import numpy as np
 import random
 from agent import Agent
 
+import json
+
 class PredatorPreyEnv(ParallelEnv):
     def __init__(self, grid_size=(10, 10), num_predators=2, num_prey=3, num_walls=5, predator_scope=2, health_gained=0.3):
         """
@@ -106,7 +108,7 @@ class PredatorPreyEnv(ParallelEnv):
                 self.grid[x, y] = 1
             agent.set_position((x, y))
 
-    def hunting(self, rewards):
+    def hunting(self, rewards, dones):
         """Handle predator prey interaction - hunting"""
         for predator in [a for a in self.agents if "predator" in a.role]:
             px, py = predator.get_position()
@@ -130,16 +132,16 @@ class PredatorPreyEnv(ParallelEnv):
                     if pos == target_prey_pos:
                         self.agents.remove(prey)
                         self.grid[target_prey_pos[0], target_prey_pos[1]] = 0
-                        # TODO Reward system needs more thoughts
-                        # rewards[predator.id] += 1  # Reward for eating prey
-                        # rewards[prey.id] += 1
+                        rewards[predator.id] += 1  # Reward for eating prey
+                        rewards[prey.id] += -1
                         predator.add_health(self.health_gained)  # Add constant value
+                        dones[prey.id] = True
                         print(f'{prey.id} killed')
                         break
 
-        return rewards
+        return rewards, dones
 
-    def predator_hunger(self):
+    def predator_hunger(self, dones):
         """Decrease predator health and remove dead predators"""
         for predator in [a for a in self.agents if "predator" in a.role]:
             predator.add_health(-0.01)
@@ -147,7 +149,9 @@ class PredatorPreyEnv(ParallelEnv):
                 px, py = predator.get_position()
                 self.agents.remove(predator)
                 self.grid[px, py] = 0
+                dones[predator.id] = True
                 print(f'{predator.id} killed')
+                return dones
 
     def generate_new_agents(self, p_predator=0.1, p_prey=0.1):
         """
@@ -184,20 +188,21 @@ class PredatorPreyEnv(ParallelEnv):
 
     def step(self):
         """Takes a step in the environment based on the actions and environment rules."""
-        rewards = {}    # TODO think about reward system implementation
+        rewards = {agent.id: 0 for agent in self.agents}
+        dones = {agent.id: False for agent in self.agents}
 
         self.agents_move()
 
-        rewards = self.hunting(rewards)
+        rewards, dones = self.hunting(rewards, dones)
 
-        self.predator_hunger()
+        dones = self.predator_hunger(dones)
 
         # Update observations
-        observations = {agent: self.get_observation(agent) for agent in self.agents}
+        observations = {agent.id: self.get_observation(agent) for agent in self.agents}
 
         # self.generate_new_agents()  # TODO Check formula in publication, seems to be wrong
 
-        return observations, rewards
+        return observations, rewards, dones
 
     def get_observation(self, agent):
         """Returns a 4-channel local grid observation for the given agent."""
@@ -251,9 +256,26 @@ if __name__ == "__main__":
     obs = env.reset()
     env.render()
 
+    # save experiences of agents
+    experiences = {
+    "observations": {},
+    "actions": {},
+    "rewards": {},
+    "dones": {}
+    }
+
+    obs = {agent.id: env.get_observation(agent) for agent in env.agents}
+
     for i in range(20):
         actions = {agent: random.randint(0, 4) for agent in env.agents}
-        obs, rewards = env.step()
+        new_obs, rewards, dones = env.step()
+
+        experiences["observations"].update(obs)
+        experiences["actions"].update(actions)
+        experiences["rewards"].update(rewards)
+        experiences["dones"].update(dones)
+
+        obs = new_obs
         env.render()
 
 # TODO Implement learning algorithm
