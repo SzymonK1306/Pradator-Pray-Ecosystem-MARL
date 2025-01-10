@@ -7,7 +7,7 @@ from agent import Agent
 import json
 
 class PredatorPreyEnv(ParallelEnv):
-    def __init__(self, grid_size=(10, 10), num_predators=2, num_prey=3, num_walls=5, predator_scope=2, health_gained=0.3):
+    def __init__(self, grid_size=(15, 15), num_predators=2, num_prey=3, num_walls=5, predator_scope=2, health_gained=0.3):
         """
         Initializes the environment.
         grid_size: Tuple[int, int] - dimensions of the grid.
@@ -70,7 +70,7 @@ class PredatorPreyEnv(ParallelEnv):
 
         return {agent: self.get_observation(agent) for agent in self.agents}
 
-    def agents_move(self):
+    def agents_move(self, actions):
         """Make a move of each agent"""
         new_positions = {}
 
@@ -79,7 +79,7 @@ class PredatorPreyEnv(ParallelEnv):
             new_x, new_y = x, y
 
             # random actions for now
-            action = agent.get_random_action()
+            action = actions[agent.id]
 
             if action == 1:  # up
                 new_x = (x - 1) % self.grid_size[0]
@@ -151,7 +151,7 @@ class PredatorPreyEnv(ParallelEnv):
                 self.grid[px, py] = 0
                 dones[predator.id] = True
                 print(f'{predator.id} killed')
-                return dones
+        return dones
 
     def generate_new_agents(self, p_predator=0.1, p_prey=0.1):
         """
@@ -186,12 +186,12 @@ class PredatorPreyEnv(ParallelEnv):
                     self.agents.append(Agent(prey_id, 'prey', (x, y)))
                     break
 
-    def step(self):
+    def step(self, actions):
         """Takes a step in the environment based on the actions and environment rules."""
         rewards = {agent.id: 0 for agent in self.agents}
         dones = {agent.id: False for agent in self.agents}
 
-        self.agents_move()
+        self.agents_move(actions)
 
         rewards, dones = self.hunting(rewards, dones)
 
@@ -267,8 +267,8 @@ if __name__ == "__main__":
     obs = {agent.id: env.get_observation(agent) for agent in env.agents}
 
     for i in range(20):
-        actions = {agent: random.randint(0, 4) for agent in env.agents}
-        new_obs, rewards, dones = env.step()
+        actions = {agent.id: agent.get_random_action() for agent in env.agents}
+        new_obs, rewards, dones = env.step(actions)
 
         experiences["observations"].update(obs)
         experiences["actions"].update(actions)
