@@ -48,8 +48,8 @@ class TestPredatorPreyEnv(unittest.TestCase):
         
         self.env.grid.fill(0)
         self.env.agents = [predator, prey]
-        self.env.grid[5, 5] = 2
-        self.env.grid[6, 6] = 1
+        self.env.grid[5, 5] = predator
+        self.env.grid[6, 6] = prey
 
         rewards = {agent.id: 0 for agent in self.env.agents}
         dones = {agent.id: False for agent in self.env.agents}
@@ -83,7 +83,7 @@ class TestPredatorPreyEnv(unittest.TestCase):
         predator = Agent("pr_0", "predator", (5, 5))
         predator.health = 1.0  # Reset health
         self.env.agents = [predator]
-        self.env.grid[5, 5] = 2
+        self.env.grid[5, 5] = predator
 
         initial_health = predator.health
         for _ in range(15):
@@ -107,16 +107,16 @@ class TestPredatorPreyEnv(unittest.TestCase):
         self.assertGreaterEqual(new_prey_count, initial_prey_count)
 
     def test_step(self):
-        self.env.reset()
+        observations = self.env.reset()
         
         initial_predator_count = len([a for a in self.env.agents if "predator" in a.role])
         initial_prey_count = len([a for a in self.env.agents if "prey" in a.role])
         initial_predator_health = [a.health for a in self.env.agents if "predator" in a.role][0]
 
         actions = {agent.id: agent.get_random_action() for agent in self.env.agents}
-        observations, rewards, dones = self.env.step(actions)
+        new_observations, rewards, dones = self.env.step(actions)
 
-        self.assertEqual(len(observations), len(self.env.agents))
+        self.assertEqual(len(new_observations), len(self.env.agents))
 
         all_agent_ids = {agent.id for agent in self.env.agents}  
         all_reward_ids = set(rewards.keys()) 
@@ -176,7 +176,7 @@ class TestPredatorPreyEnv(unittest.TestCase):
             initial_prey_count = new_prey_count
 
     def test_random_actions(self):
-        self.env.reset()
+        observations = self.env.reset()
         
         for _ in range(15):
             initial_predator_count = len([a for a in self.env.agents if "predator" in a.role])
@@ -184,9 +184,9 @@ class TestPredatorPreyEnv(unittest.TestCase):
             initial_predator_health = [a.health for a in self.env.agents if "predator" in a.role][0]
 
             actions = {agent.id: random.choice([1, 2, 3, 4]) for agent in self.env.agents}
-            observations, rewards, dones = self.env.step(actions)
+            new_observations, rewards, dones = self.env.step(actions)
 
-            self.assertEqual(len(observations), len(self.env.agents))
+            self.assertEqual(len(new_observations), len(self.env.agents))
 
             all_agent_ids = {agent.id for agent in self.env.agents}  
             all_reward_ids = set(rewards.keys()) 
@@ -203,6 +203,8 @@ class TestPredatorPreyEnv(unittest.TestCase):
             new_prey_count = len([a for a in self.env.agents if "prey" in a.role])
             self.assertLessEqual(new_predator_count, initial_predator_count)
             self.assertLessEqual(new_prey_count, initial_prey_count)
+
+            observations = new_observations
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@ from pettingzoo.utils.env import ParallelEnv
 from pettingzoo.utils import wrappers
 import numpy as np
 import random
+import csv
 
 from agent import Agent
 
@@ -31,7 +32,7 @@ class PredatorPreyEnv(ParallelEnv):
         self.walls_positions = []
 
         # Initialize the grid
-        self.grid = np.zeros(self.grid_size, dtype=int)
+        self.grid = np.zeros(self.grid_size, dtype=object)
 
         # self.reset()
 
@@ -56,7 +57,7 @@ class PredatorPreyEnv(ParallelEnv):
                 if self.grid[x, y] == 0:
                     predator = Agent(f"pr_{i}", "predator", (x, y))
                     self.agents.append(predator)
-                    self.grid[x, y] = 2  # Predator
+                    self.grid[x, y] = predator  # Predator
                     break
 
         # Create and place prey
@@ -66,7 +67,7 @@ class PredatorPreyEnv(ParallelEnv):
                 if self.grid[x, y] == 0:
                     prey = Agent(f"py_{i}", "prey", (x, y))
                     self.agents.append(prey)
-                    self.grid[x, y] = 1  # Prey
+                    self.grid[x, y] = prey  # Prey
                     break
 
         return {agent: self.get_observation(agent) for agent in self.agents}
@@ -103,12 +104,10 @@ class PredatorPreyEnv(ParallelEnv):
 
         for agent in self.agents:
             x, y = new_positions[agent.id]
-            if "predator" in agent.role:
-                self.grid[x, y] = 2
-            else:
-                self.grid[x, y] = 1
+            self.grid[x, y] = agent
             agent.set_position((x, y))
 
+    # TODO try to optimise with object pointers
     def hunting(self, rewards, dones):
         """Handle predator prey interaction - hunting"""
         for predator in [a for a in self.agents if "predator" in a.role]:
@@ -120,7 +119,7 @@ class PredatorPreyEnv(ParallelEnv):
                     if dx == 0 and dy == 0:
                         continue
                     nx, ny = (px + dx) % self.grid_size[0], (py + dy) % self.grid_size[1]
-                    if self.grid[nx, ny] == 1:
+                    if type(self.grid[nx, ny]) == Agent and self.grid[nx, ny].role == 'prey':
                         distance = abs(dx) + abs(dy)  # Manhattan
                         prey_in_scope.append((distance, (nx, ny)))
 
@@ -137,7 +136,7 @@ class PredatorPreyEnv(ParallelEnv):
                         rewards[prey.id] += -1
                         predator.add_health(self.health_gained)  # Add constant value
                         dones[prey.id] = True
-                        print(f'{prey.id} killed')
+                        # print(f'{prey.id} killed')
                         break
 
         return rewards, dones
@@ -151,10 +150,10 @@ class PredatorPreyEnv(ParallelEnv):
                 self.agents.remove(predator)
                 self.grid[px, py] = 0
                 dones[predator.id] = True
-                print(f'{predator.id} killed')
+                # print(f'{predator.id} killed')
         return dones
 
-    def generate_new_agents(self, p_predator=0.1, p_prey=0.1):
+    def generate_new_agents(self, p_predator=0.003, p_prey=0.006):
         """
         Generates new predators and prey based on the provided formula.
         p_predator: float - probability factor for generating new predators.
@@ -162,10 +161,10 @@ class PredatorPreyEnv(ParallelEnv):
         """
         # Calculate the number of new predators and prey
         num_predators = len([a for a in self.agents if "predator" in a.role])
-        num_prey = len([a for a in self.agents if "prey" in a.role])
+        num_preys = len([a for a in self.agents if "prey" in a.role])
 
         new_predators = max(1, int(num_predators * p_predator))
-        new_prey = max(1, int(num_prey * p_prey))
+        new_prey = max(1, int(num_preys * p_prey))
 
         # Add new predators
         for _ in range(new_predators):
@@ -173,8 +172,9 @@ class PredatorPreyEnv(ParallelEnv):
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:  # Empty cell
-                    self.grid[x, y] = 2  # Predator
-                    self.agents.append(Agent(predator_id, 'predator', (x, y)))
+                    created_agent = Agent(predator_id, 'predator', (x, y))
+                    self.grid[x, y] = created_agent  # Predator
+                    self.agents.append(created_agent)
                     break
 
         # Add new preys
@@ -183,8 +183,9 @@ class PredatorPreyEnv(ParallelEnv):
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:  # Empty cell
-                    self.grid[x, y] = 1  # Prey
-                    self.agents.append(Agent(prey_id, 'prey', (x, y)))
+                    created_agent = Agent(prey_id, 'prey', (x, y))
+                    self.grid[x, y] = created_agent  # Prey
+                    self.agents.append(created_agent)
                     break
 
     def step(self, actions):
@@ -200,8 +201,6 @@ class PredatorPreyEnv(ParallelEnv):
 
         # Update observations
         observations = {agent.id: self.get_observation(agent) for agent in self.agents}
-
-        # self.generate_new_agents()  # TODO Check formula in publication, seems to be wrong
 
         return observations, rewards, dones
 
@@ -222,15 +221,13 @@ class PredatorPreyEnv(ParallelEnv):
 
                 if self.grid[nx, ny] == -1:
                     wall_layer[local_x, local_y] = 1
-                elif self.grid[nx, ny] == 2:
+                elif type(self.grid[nx, ny]) == Agent and self.grid[nx, ny].role == 'predator':
                     predator_layer[local_x, local_y] = 1
-                elif self.grid[nx, ny] == 1:
+                    health_layer[local_x, local_y] = self.grid[nx, ny].health
+                elif type(self.grid[nx, ny]) == Agent and self.grid[nx, ny].role == 'prey':
                     prey_layer[local_x, local_y] = 1
+                    health_layer[local_x, local_y] = self.grid[nx, ny].health
 
-                for a in self.agents:
-                    px, py = a.get_position()
-                    if (px, py) == (nx, ny):
-                        health_layer[local_x, local_y] = a.health
 
         return np.stack([wall_layer, predator_layer, prey_layer, health_layer], axis=0)
 
@@ -248,10 +245,10 @@ class PredatorPreyEnv(ParallelEnv):
 # Wrapping the environment - Can be added in the future
 
 def env_creator():
-    env = PredatorPreyEnv()
+    env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 0.3)
     return env
 
-RUN_TESTS_BEFORE = True 
+RUN_TESTS_BEFORE = True
 
 def run_tests():
     print("Running tests...")
@@ -275,7 +272,10 @@ if __name__ == "__main__":
     
     env = env_creator()
     obs = env.reset()
-    env.render()
+    # env.render()
+
+    csv_file = 'output_cross.csv'
+    data = []
 
     # save experiences of agents
     experiences = {
@@ -285,9 +285,8 @@ if __name__ == "__main__":
     "dones": {}
     }
 
-    obs = {agent.id: env.get_observation(agent) for agent in env.agents}
-
-    for i in range(20):
+    # obs = {agent.id: env.get_observation(agent) for agent in env.agents}
+    for i in range(8000):
         actions = {agent.id: agent.get_random_action() for agent in env.agents}
         new_obs, rewards, dones = env.step(actions)
 
@@ -296,8 +295,26 @@ if __name__ == "__main__":
         experiences["rewards"].update(rewards)
         experiences["dones"].update(dones)
 
+        env.generate_new_agents()
+
+        num_predators = len([a for a in env.agents if "predator" in a.role])
+        num_preys = len([a for a in env.agents if "prey" in a.role])
+        data.append([i, num_preys, num_predators])
+
         obs = new_obs
-        env.render()
+        print(i, num_predators, num_preys)
+        # env.render()
+
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Loop through each item in data
+        for row in data:
+            # Extract the last three elements
+            last_three = row[-3:]
+
+            # Write them to the CSV
+            writer.writerow(last_three)
 
 # TODO Implement learning algorithm
 # TODO Implement exploration algorithm

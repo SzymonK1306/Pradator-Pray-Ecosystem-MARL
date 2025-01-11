@@ -7,7 +7,10 @@ class Agent():
         self.role = role
         self.position = position
 
-        self.health = 1
+        if role == 'predator':
+            self.health = random.uniform(0.5, 1)
+        else:
+            self.health = 1
 
     def set_position(self, position):
         self.position = position
