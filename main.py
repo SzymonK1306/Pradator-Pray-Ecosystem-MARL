@@ -5,6 +5,7 @@ from pettingzoo.utils import wrappers
 import numpy as np
 import random
 import csv
+import torch
 
 from agent import Agent
 
@@ -25,6 +26,9 @@ class PredatorPreyEnv(ParallelEnv):
         self.num_walls = num_walls
         self.predator_scope = predator_scope
         self.health_gained = health_gained
+
+        self.max_num_predators = 10000
+        self.max_num_preys = 10000
 
         self.agents = []
         # self.agent_positions = {agent: None for agent in self.agents}
@@ -70,7 +74,7 @@ class PredatorPreyEnv(ParallelEnv):
                     self.grid[x, y] = prey  # Prey
                     break
 
-        return {agent: self.get_observation(agent) for agent in self.agents}
+        return {agent.id: self.get_observation(agent) for agent in self.agents}
 
     def agents_move(self, actions):
         """Make a move of each agent"""
@@ -163,8 +167,10 @@ class PredatorPreyEnv(ParallelEnv):
         num_predators = len([a for a in self.agents if "predator" in a.role])
         num_preys = len([a for a in self.agents if "prey" in a.role])
 
-        new_predators = max(1, int(num_predators * p_predator))
-        new_prey = max(1, int(num_preys * p_prey))
+        if num_predators < self.max_num_predators:
+            new_predators = max(1, int(num_predators * p_predator))
+        if num_preys < self.max_num_preys:
+            new_prey = max(1, int(num_preys * p_prey))
 
         # Add new predators
         for _ in range(new_predators):
@@ -199,6 +205,7 @@ class PredatorPreyEnv(ParallelEnv):
 
         dones = self.predator_hunger(dones)
 
+        self.generate_new_agents()
         # Update observations
         observations = {agent.id: self.get_observation(agent) for agent in self.agents}
 
@@ -248,7 +255,7 @@ def env_creator():
     env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 0.3)
     return env
 
-RUN_TESTS_BEFORE = True
+RUN_TESTS_BEFORE = False
 
 def run_tests():
     print("Running tests...")
@@ -279,15 +286,28 @@ if __name__ == "__main__":
 
     # save experiences of agents
     experiences = {
-    "observations": {},
-    "actions": {},
-    "rewards": {},
-    "dones": {}
+        "observations": {},
+        "actions": {},
+        "rewards": {},
+        "dones": {},
+        "next_observations": {},
+        "hidden_states": {},
+        "next_hidden_states": {}
     }
 
-    # obs = {agent.id: env.get_observation(agent) for agent in env.agents}
+    hidden_states = {agent.id: None for agent in env.agents}
+
     for i in range(8000):
-        actions = {agent.id: agent.get_random_action() for agent in env.agents}
+        actions = {}
+        for agent in env.agents:
+            obs_tensor = torch.tensor(obs[agent.id], dtype=torch.float32).unsqueeze(0)
+            if agent.id not in hidden_states.keys():
+                hidden_state = None
+            else:
+                hidden_state = hidden_states[agent.id]
+            actions[agent.id], new_hidden_state = agent.get_DDQN_action(obs_tensor, hidden_state)
+            hidden_states[agent.id] = new_hidden_state
+
         new_obs, rewards, dones = env.step(actions)
 
         experiences["observations"].update(obs)
@@ -295,7 +315,7 @@ if __name__ == "__main__":
         experiences["rewards"].update(rewards)
         experiences["dones"].update(dones)
 
-        env.generate_new_agents()
+        # env.generate_new_agents()
 
         num_predators = len([a for a in env.agents if "predator" in a.role])
         num_preys = len([a for a in env.agents if "prey" in a.role])
