@@ -16,11 +16,8 @@ class DDQNLSTM(nn.Module):
         self.lstm = nn.LSTM(input_size=256, hidden_size=256, batch_first=True)
 
         # Fully connected layers for state-value and advantage-value streams
-        self.fc_state = nn.Linear(256, 128)
-        self.state_value = nn.Linear(128, 1)
-
-        self.fc_advantage = nn.Linear(256, 128)
-        self.advantage_values = nn.Linear(128, n_actions)
+        self.fc_output_layer = nn.Linear(256, 128)
+        self.output_layer = nn.Linear(128, n_actions)
 
     def forward(self, x, hidden_state=None):
         batch_size = x.size(0)
@@ -43,14 +40,7 @@ class DDQNLSTM(nn.Module):
         x = x.squeeze(1)  # Remove the time dimension
 
         # State-value stream
-        state = F.relu(self.fc_state(x))
-        state_value = self.state_value(state)
+        state = F.relu(self.fc_output_layer(x))
+        output = self.output_layer(state)
 
-        # Advantage-value stream
-        adv = F.relu(self.fc_advantage(x))
-        advantage_values = self.advantage_values(adv)
-
-        # Combine state value and advantage values into Q-values
-        q_values = state_value + (advantage_values - advantage_values.mean(dim=1, keepdim=True))
-
-        return q_values, hidden_state
+        return output, hidden_state
