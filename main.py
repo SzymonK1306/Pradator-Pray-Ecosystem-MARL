@@ -152,7 +152,7 @@ class PredatorPreyEnv(ParallelEnv):
     def predator_hunger(self, dones):
         """Decrease predator health and remove dead predators"""
         for predator in [a for a in self.agents if "predator" in a.role]:
-            predator.add_health(-0.01)
+            predator.add_health(-0.003)
             if predator.health <= 0:
                 px, py = predator.get_position()
                 self.agents.remove(predator)
@@ -171,10 +171,12 @@ class PredatorPreyEnv(ParallelEnv):
         num_predators = len([a for a in self.agents if "predator" in a.role])
         num_preys = len([a for a in self.agents if "prey" in a.role])
 
+        new_preys = 0
+        new_predators = 0
         if num_predators < self.max_num_predators:
             new_predators = max(1, int(num_predators * p_predator))
         if num_preys < self.max_num_preys:
-            new_prey = max(1, int(num_preys * p_prey))
+            new_preys = max(1, int(num_preys * p_prey))
 
         # Add new predators
         for _ in range(new_predators):
@@ -188,7 +190,7 @@ class PredatorPreyEnv(ParallelEnv):
                     break
 
         # Add new preys
-        for _ in range(new_prey):
+        for _ in range(new_preys):
             prey_id = f"py_{len([a for a in self.agents if 'prey' in a.role])}"
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
@@ -209,7 +211,7 @@ class PredatorPreyEnv(ParallelEnv):
 
         dones = self.predator_hunger(dones)
 
-        self.generate_new_agents()
+        self.generate_new_agents(0.003, 0.003)
         # Update observations
         observations = {agent.id: self.get_observation(agent) for agent in self.agents}
 
@@ -311,7 +313,7 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 # Wrapping the environment - Can be added in the future
 
 def env_creator():
-    env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 0.3)
+    env = PredatorPreyEnv((600, 600), 2000, 1000, 1000, 5, 0.5)
     return env
 
 RUN_TESTS_BEFORE = False
@@ -348,19 +350,9 @@ if __name__ == "__main__":
     obs = env.reset()
     # env.render()
 
-    csv_file = 'output_random.csv'
+    csv_file = 'output_random_2000_003.csv'
     data = []
 
-    # save experiences of agents
-    # experiences = {
-    #     "observations": {},
-    #     "actions": {},
-    #     "rewards": {},
-    #     "dones": {},
-    #     "next_observations": {},
-    #     "hidden_states": {},
-    #     "next_hidden_states": {}
-    # }
     predator_replay_buffer = deque()
     prey_replay_buffer = deque()
 
@@ -377,8 +369,9 @@ if __name__ == "__main__":
     hidden_states = {agent.id: None for agent in env.agents}
     new_hidden_states = {agent.id: None for agent in env.agents}
 
-    for i in range(8000):
+    for i in range(20000):
         actions = {}
+        # actions = {agent.id: random.randint(0, 4) for agent in env.agents}
         for agent in env.agents:
             obs_tensor = torch.tensor(obs[agent.id], dtype=torch.float32).unsqueeze(0)
             if agent.id not in hidden_states.keys():
@@ -429,7 +422,7 @@ if __name__ == "__main__":
 
         num_predators = len([a for a in env.agents if "predator" in a.role])
         num_preys = len([a for a in env.agents if "prey" in a.role])
-        data.append([i, num_preys, num_predators])
+        data.append([i, num_predators, num_preys])
 
         obs = new_obs
         hidden_state = new_hidden_states
@@ -447,6 +440,5 @@ if __name__ == "__main__":
             # Write them to the CSV
             writer.writerow(last_three)
 
-# TODO Implement learning algorithm
 # TODO Implement exploration algorithm
 
