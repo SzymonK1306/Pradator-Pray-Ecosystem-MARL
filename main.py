@@ -260,7 +260,7 @@ def batchify(data, batch_size):
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
 
-def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, agent_optimizer):
+def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, agent_optimizer, device='cpu'):
     batch = random.sample(agent_replay_buffer, BUFFER_SIZE)
 
     mini_batches = batchify(batch, BATCH_SIZE)
@@ -282,12 +282,12 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
         target_q_values = []
         for obs_mn, action_mn, reward_mn, done_mn, next_obs_mn, hidden_state_mn, next_hidden_state_mn in minibatch:
             with torch.no_grad():
-                next_obs = torch.tensor(next_obs_mn, dtype=torch.float32).unsqueeze(0)
+                next_obs = torch.tensor(next_obs_mn, dtype=torch.float32).unsqueeze(0).to(device)
                 next_action = torch.argmax(agent_policy_model(next_obs, next_hidden_state_mn)[0])
                 target_q_value = reward_mn + GAMMA * (1 - done_mn) * \
                                  agent_target_model(next_obs, next_hidden_state_mn)[0].squeeze(0)[next_action]
                 target_q_values.append(target_q_value)
-            q_values, _ = agent_policy_model(torch.tensor(obs_mn, dtype=torch.float32).unsqueeze(0), hidden_state_mn)
+            q_values, _ = agent_policy_model(torch.tensor(obs_mn, dtype=torch.float32, device=device).unsqueeze(0), hidden_state_mn)
             q_value = q_values.gather(1, action_mn.view(1, 1)).squeeze()
             q_values_batch.append(q_value)
         target_q_values = torch.stack(target_q_values)
@@ -313,7 +313,7 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 # Wrapping the environment - Can be added in the future
 
 def env_creator():
-    env = PredatorPreyEnv((600, 600), 2000, 1000, 1000, 5, 0.5)
+    env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 0.5)
     return env
 
 RUN_TESTS_BEFORE = False
@@ -333,6 +333,9 @@ def run_tests():
 
 # Example usage
 if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
     if RUN_TESTS_BEFORE:
         run_tests() 
     else:
@@ -350,17 +353,17 @@ if __name__ == "__main__":
     obs = env.reset()
     # env.render()
 
-    csv_file = 'output_random_2000_003.csv'
+    csv_file = 'output_ENV_1.csv'
     data = []
 
     predator_replay_buffer = deque()
     prey_replay_buffer = deque()
 
     # Models
-    predator_policy_model = DDQNLSTM((4, 11, 11), 4)
-    predator_target_model = DDQNLSTM((4, 11, 11), 4)
-    prey_policy_model = DDQNLSTM((4, 11, 11), 4)
-    prey_target_model = DDQNLSTM((4, 11, 11), 4)
+    predator_policy_model = DDQNLSTM((4, 11, 11), 4).to(device)
+    predator_target_model = DDQNLSTM((4, 11, 11), 4).to(device)
+    prey_policy_model = DDQNLSTM((4, 11, 11), 4).to(device)
+    prey_target_model = DDQNLSTM((4, 11, 11), 4).to(device)
 
     # Optimizers
     predator_optimizer = optim.Adam(predator_policy_model.parameters(), lr=LEARNING_RATE)
@@ -373,7 +376,7 @@ if __name__ == "__main__":
         actions = {}
         # actions = {agent.id: random.randint(0, 4) for agent in env.agents}
         for agent in env.agents:
-            obs_tensor = torch.tensor(obs[agent.id], dtype=torch.float32).unsqueeze(0)
+            obs_tensor = torch.tensor(obs[agent.id], dtype=torch.float32).unsqueeze(0).to(device)
             if agent.id not in hidden_states.keys():
                 hidden_state = None
                 hidden_states[agent.id] = None
@@ -383,7 +386,11 @@ if __name__ == "__main__":
                 action_values, new_hidden_state = predator_policy_model(obs_tensor, hidden_state)
             else:
                 action_values, new_hidden_state = prey_policy_model(obs_tensor, hidden_state)
-            actions[agent.id] = torch.argmax(action_values)
+
+            if random.random() < EPSILON:  # Exploration
+                actions[agent.id] = torch.tensor(random.randint(0, 3), device=device)  # Assuming action space is [0, 1, 2, 3]
+            else:  # Exploitation
+                actions[agent.id] = torch.argmax(action_values)
             new_hidden_states[agent.id] = new_hidden_state
 
         new_obs, rewards, dones = env.step(actions)
@@ -394,7 +401,7 @@ if __name__ == "__main__":
         # experiences["dones"].update(dones)
         for agent_id in actions.keys():
             if dones[agent_id]:
-                new_obs_to_save = torch.zeros_like(torch.tensor(obs[agent_id], dtype=torch.float32))  # Placeholder
+                new_obs_to_save = torch.zeros_like(torch.tensor(obs[agent_id], dtype=torch.float32)).to(device)  # Placeholder
             else:
                 new_obs_to_save = new_obs[agent_id]
             experience = (
@@ -414,10 +421,10 @@ if __name__ == "__main__":
         # env.generate_new_agents()
         if len(predator_replay_buffer) >= BUFFER_SIZE:
             # Sample a minibatch and train (same as before)
-            update_weights(predator_replay_buffer, predator_policy_model, predator_target_model, predator_optimizer)
+            update_weights(predator_replay_buffer, predator_policy_model, predator_target_model, predator_optimizer, device)
         if len(prey_replay_buffer) >= BUFFER_SIZE:
             # Sample a minibatch and train (same as before)
-            update_weights(prey_replay_buffer, prey_policy_model, prey_target_model, prey_optimizer)
+            update_weights(prey_replay_buffer, prey_policy_model, prey_target_model, prey_optimizer, device)
 
 
         num_predators = len([a for a in env.agents if "predator" in a.role])
@@ -427,18 +434,21 @@ if __name__ == "__main__":
         obs = new_obs
         hidden_state = new_hidden_states
         print(i, num_predators, num_preys)
+        with open(csv_file, mode='a', newline='') as file:  # Open in append mode
+            writer = csv.writer(file)
+            writer.writerow([i, num_predators, num_preys])
         # env.render()
 
-    with open(csv_file, mode='w', newline='') as file:
-        writer = csv.writer(file)
-
-        # Loop through each item in data
-        for row in data:
-            # Extract the last three elements
-            last_three = row[-3:]
-
-            # Write them to the CSV
-            writer.writerow(last_three)
+    # with open(csv_file, mode='w', newline='') as file:
+    #     writer = csv.writer(file)
+    #
+    #     # Loop through each item in data
+    #     for row in data:
+    #         # Extract the last three elements
+    #         last_three = row[-3:]
+    #
+    #         # Write them to the CSV
+    #         writer.writerow(last_three)
 
 # TODO Implement exploration algorithm
 
