@@ -1,3 +1,4 @@
+import math
 import sys
 import unittest
 from collections import deque
@@ -152,7 +153,7 @@ class PredatorPreyEnv(ParallelEnv):
     def predator_hunger(self, dones):
         """Decrease predator health and remove dead predators"""
         for predator in [a for a in self.agents if "predator" in a.role]:
-            predator.add_health(-0.003)
+            predator.add_health(-0.01)
             if predator.health <= 0:
                 px, py = predator.get_position()
                 self.agents.remove(predator)
@@ -174,9 +175,9 @@ class PredatorPreyEnv(ParallelEnv):
         new_preys = 0
         new_predators = 0
         if num_predators < self.max_num_predators:
-            new_predators = max(1, int(num_predators * p_predator))
+            new_predators = max(1, math.ceil(num_predators * p_predator))
         if num_preys < self.max_num_preys:
-            new_preys = max(1, int(num_preys * p_prey))
+            new_preys = max(1, math.ceil(num_preys * p_prey))
 
         # Add new predators
         for _ in range(new_predators):
@@ -211,7 +212,7 @@ class PredatorPreyEnv(ParallelEnv):
 
         dones = self.predator_hunger(dones)
 
-        self.generate_new_agents(0.003, 0.003)
+        self.generate_new_agents(0.003, 0.006)
         # Update observations
         observations = {agent.id: self.get_observation(agent) for agent in self.agents}
 
@@ -313,7 +314,7 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 # Wrapping the environment - Can be added in the future
 
 def env_creator():
-    env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 0.5)
+    env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 0.7)
     return env
 
 RUN_TESTS_BEFORE = False
@@ -342,7 +343,7 @@ if __name__ == "__main__":
         print("WARNING: running without tests...")    
 
     # Hyperparameters
-    BUFFER_SIZE = 10000
+    BUFFER_SIZE = 64
     BATCH_SIZE = 64
     EPSILON = 0.1
     UPDATE_FREQ = 50
@@ -353,7 +354,7 @@ if __name__ == "__main__":
     obs = env.reset()
     # env.render()
 
-    csv_file = 'output_ENV_1.csv'
+    csv_file = 'output_ENV_1_more_hunger_ceil.csv'
     data = []
 
     predator_replay_buffer = deque()
@@ -437,6 +438,11 @@ if __name__ == "__main__":
         with open(csv_file, mode='a', newline='') as file:  # Open in append mode
             writer = csv.writer(file)
             writer.writerow([i, num_predators, num_preys])
+    torch.save(predator_target_model.state_dict(), "predator_target_model.pth")
+    torch.save(predator_policy_model.state_dict(), "predator_policy_model.pth")
+
+    torch.save(prey_target_model.state_dict(), "prey_target_model.pth")
+    torch.save(prey_policy_model.state_dict(), "prey_policy_model.pth")
         # env.render()
 
     # with open(csv_file, mode='w', newline='') as file:
@@ -450,5 +456,4 @@ if __name__ == "__main__":
     #         # Write them to the CSV
     #         writer.writerow(last_three)
 
-# TODO Implement exploration algorithm
 
