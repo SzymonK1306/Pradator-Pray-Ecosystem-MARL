@@ -47,7 +47,7 @@ UPDATE_FREQ = 50
 GAMMA = 0.99
 LEARNING_RATE = 0.0001
 USE_RANDOM_ACTIONS = True  # Set to False to use policy actions
-EPOCHS = 75
+EPOCHS = 2500
 # Initialize environment
 env = PredatorPreyEnvType2()
 obs = env.reset()
@@ -80,7 +80,7 @@ prey_counts = []
 for i in range(EPOCHS):
     actions = {}
     frozen_agents = set()
-    env.ensure_population()
+    # env.ensure_population()
     print(f"Iteration {i}")
 
     for agent in env.agents:
@@ -110,7 +110,7 @@ for i in range(EPOCHS):
 
     new_obs, rewards, dones = env.step(actions)
     num_matings = rewards.get('mating_count', 0)
-    print(f"Number of matings this iteration: {num_matings}")
+    # print(f"Number of matings this iteration: {num_matings}")
 
     num_predators = len([a for a in env.agents if a.role == "predator"])
     num_preys = len([a for a in env.agents if a.role == "prey"])
@@ -146,7 +146,7 @@ for i in range(EPOCHS):
 
     if not USE_RANDOM_ACTIONS:
         pass
-        # update_weights(predator_replay_buffer, predator_policy_model, predator_target_model, predator_optimizer)
+        update_weights(predator_replay_buffer, predator_policy_model, predator_target_model, predator_optimizer)
     if not USE_RANDOM_ACTIONS:
         for agent_id in actions.keys():
             if dones[agent_id]:
@@ -172,7 +172,7 @@ for i in range(EPOCHS):
         update_weights(prey_replay_buffer, prey_policy_model, prey_target_model, prey_optimizer)
 
     data.append([i, num_predators, num_preys])
-
+    env.ensure_population()
     obs = new_obs
     hidden_states = new_hidden_states
 
