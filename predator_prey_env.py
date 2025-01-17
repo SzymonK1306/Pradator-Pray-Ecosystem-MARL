@@ -250,7 +250,7 @@ class PredatorPreyEnv(ParallelEnv):
 
 class PredatorPreyEnvType2(PredatorPreyEnv):
     def __init__(self, grid_size=(600, 600), num_predators=2000, num_prey=1000, num_walls=10, predator_scope=5,
-                 health_gained=0.7, mating_scope=15, mating_reward=4, predator_mating_probability=0.003,
+                 health_gained=1.0, mating_scope=15, mating_reward=4, predator_mating_probability=0.003,
                  prey_mating_probability=0.006):
         """
         Initializes the extended environment for Type 2 simulation with mating behavior and environment settings.
