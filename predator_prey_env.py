@@ -326,8 +326,8 @@ class PredatorPreyEnvType2(PredatorPreyEnv):
                     new_agent = Agent(new_agent_id, role, (new_x, new_y))
                     self.agents.append(new_agent)
                     self.grid[new_x, new_y] = new_agent
-                    #print("added")
-                    #print(role)
+                   # print("added")
+                   # print(role)
     def predator_hunger(self, dones):
         """Decrease predator health and remove dead predators."""
         for predator in list(self.agents):
@@ -352,6 +352,8 @@ class PredatorPreyEnvType2(PredatorPreyEnv):
         dones = self.predator_hunger(dones)
 
         self.mating(rewards, dones)
+
+        self.ensure_population()
         # Update observations
         observations = {agent.id: self.get_observation(agent) for agent in self.agents}
 
