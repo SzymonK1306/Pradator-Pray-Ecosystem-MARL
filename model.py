@@ -9,8 +9,8 @@ class DDQNLSTM(nn.Module):
 
         # Convolutional layers with padding to preserve dimensions
         self.conv1 = nn.Conv2d(in_channels=input_shape[0], out_channels=32, kernel_size=4, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1)  # Padding added
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=256, kernel_size=3, stride=2, padding=1)  # Padding added
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2)  # Padding added
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=256, kernel_size=3, stride=2)  # Padding added
 
         # LSTM layer
         self.lstm = nn.LSTM(input_size=256, hidden_size=256, batch_first=True)
