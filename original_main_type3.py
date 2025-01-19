@@ -79,7 +79,7 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 # Wrapping the environment - Can be added in the future
 
 def env_creator():
-    env = PredatorPreyEnvType3((600, 600), 1000, 1000, 10000, 5, 1.0)
+    env = PredatorPreyEnvType3((600, 600), 25, 100, 10000, 5, 1.0)
     return env
 
 RUN_TESTS_BEFORE = False

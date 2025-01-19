@@ -44,12 +44,14 @@ class Agent():
 class PredatorPreyEnvType3(ParallelEnv):
     def __init__(self,
                  grid_size=(600, 600),
-                 num_predators=500,
-                 num_prey=100,
-                 num_walls=1000,
+                 num_predators=20,
+                 num_prey=30,
+                 num_walls=500,
                  predator_scope=5,
                  health_gained=0.3,
-                 mating_scope=10,
+                 p_predator=0.003,  # dodany parametr prawdopodobieństwa dla drapieżników
+                 p_prey=0.006,  # dodany parametr prawdopodobieństwa dla ofiar
+                 mating_scope=None,
                  mutation_chance=0.1,
                  mutation_std=1.0):
         """
@@ -60,11 +62,12 @@ class PredatorPreyEnvType3(ParallelEnv):
           - num_predators: początkowa liczba drapieżników
           - num_prey: początkowa liczba ofiar
           - num_walls: liczba ścian
-          - predator_scope: zasięg widzenia/poszukiwania (obserwacja: (2*predator_scope+1)^2)
+          - predator_scope: zasięg widzenia/poszukiwania (dla obserwacji)
           - health_gained: przyrost zdrowia drapieżnika po skutecznym ataku
-          - mating_scope: maksymalna odległość, przy której dwa agenty mogą się spotkać i zreprodukować;
-                          domyślnie przyjmujemy tę samą wartość co predator_scope (można podać oddzielnie)
-          - mutation_chance: prawdopodobieństwo wystąpienia mutacji podczas recombinacji
+          - p_predator: współczynnik generowania nowych drapieżników
+          - p_prey: współczynnik generowania nowych ofiar
+          - mating_scope: zakres reprodukcji (domyślnie taki sam jak predator_scope, jeśli nie podano)
+          - mutation_chance: prawdopodobieństwo mutacji przy recombinacji
           - mutation_std: odchylenie standardowe rozkładu normalnego używanego przy mutacji
         """
         self.grid_size = grid_size
@@ -74,13 +77,15 @@ class PredatorPreyEnvType3(ParallelEnv):
         self.predator_scope = predator_scope
         self.health_gained = health_gained
 
-        # Ustalanie maksymalnej liczby agentów (przydatne przy globalnych warunkach, aczkolwiek w naszym przypadku
-        # generowanie nowych osobników zależy od spotkania par)
         self.max_num_predators = 10000
         self.max_num_preys = 10000
 
-        # Zakres reprodukcyjny – jeśli nie podano, przyjmujemy wartość predator_scope
-        self.mating_scope = mating_scope if mating_scope is not None else predator_scope
+        # Ustawienie prawdopodobieństwa generacji nowych agentów
+        self.p_predator = p_predator
+        self.p_prey = p_prey
+
+        # Jeśli mating_scope nie został podany, ustawiamy go na predator_scope
+        # self.mating_scope = mating_scope if mating_scope is not None else predator_scope
 
         self.mutation_chance = mutation_chance
         self.mutation_std = mutation_std
@@ -272,79 +277,79 @@ class PredatorPreyEnvType3(ParallelEnv):
 
     def generate_new_agents(self):
         """
-        Generuje nowych agentów poprzez recombinację parametrów dwóch agentów, ale tylko wtedy,
-        gdy para agentów tego samego typu znajduje się w zasięgu reprodukcyjnym (mating scope).
-
+        Generuje nowych agentów na podstawie równania:
+             N_new_agent = max(1, ceil(N_agent * p_agent))
         Dla drapieżników łączone są parametry: speed oraz attack.
         Dla ofiar łączone są parametry: speed oraz resilience.
-        Nowy agent pojawia się tylko dla par, które spełniają warunek odległości mniejszej lub równej mating_scope.
+        Parametry nowych agentów są wynikiem recombinacji (z potencjalną mutacją) parametrów dwóch losowo dobranych rodziców.
         """
-
-        # --- Dla drapieżników ---
+        # --- Generowanie nowych drapieżników ---
         predators = [a for a in self.agents if a.role == 'predator']
-        predator_pairs = []
-        # Wyszukiwanie par drapieżników znajdujących się wystarczająco blisko siebie
-        for i, agent1 in enumerate(predators):
-            for agent2 in predators[i + 1:]:
-                x1, y1 = agent1.get_position()
-                x2, y2 = agent2.get_position()
-                distance = abs(x1 - x2) + abs(y1 - y2)  # odległość Manhattan
-                if distance <= self.mating_scope:
-                    predator_pairs.append((agent1, agent2))
-        # Rekombinacja parametrów dla każdej znalezionej pary
-        for parent1, parent2 in predator_pairs:
-            r = random.uniform(0, 1)
-            new_speed = r * parent1.speed + (1 - r) * parent2.speed
-            new_attack = r * parent1.attack + (1 - r) * parent2.attack
-            # Mutacja
-            if random.random() < self.mutation_chance:
-                new_speed += np.random.normal(0, self.mutation_std)
-            if random.random() < self.mutation_chance:
-                new_attack += np.random.normal(0, self.mutation_std)
-            # Nowy identyfikator nowego drapieżnika
+        num_predators = len(predators)
+        new_predators = 0
+        if num_predators < self.max_num_predators:
+            new_predators = max(1, math.ceil(num_predators * self.p_predator))
+
+        for _ in range(new_predators):
+            if len(predators) >= 2:
+                parent1, parent2 = random.sample(predators, 2)
+                r = random.uniform(0, 1)
+                new_speed = r * parent1.speed + (1 - r) * parent2.speed
+                new_attack = r * parent1.attack + (1 - r) * parent2.attack
+                # Mutacja
+                if random.random() < self.mutation_chance:
+                    new_speed += np.random.normal(0, self.mutation_std)
+                if random.random() < self.mutation_chance:
+                    new_attack += np.random.normal(0, self.mutation_std)
+            else:
+                # W przypadku, gdy nie ma dwóch rodziców, inicjalizujemy losowo
+                new_speed = random.uniform(0.5, 1.5)
+                new_attack = random.uniform(0.5, 1.5)
+
             predator_id = f"pr_{len([a for a in self.agents if a.role == 'predator'])}"
-            # Znalezienie losowej, wolnej pozycji na siatce
+            # Szukamy losowej, wolnej pozycji na siatce
             while True:
-                x = random.randint(0, self.grid_size[0] - 1)
-                y = random.randint(0, self.grid_size[1] - 1)
+                x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
                     new_pred = Agent(predator_id, 'predator', (x, y))
                     new_pred.health = random.uniform(0.5, 1)
                     new_pred.speed = new_speed
                     new_pred.attack = new_attack
-                    new_pred.resilience = 0
+                    new_pred.resilience = 0  # Dla drapieżników resilience nie jest używane
                     self.agents.append(new_pred)
                     self.grid[x, y] = new_pred
                     break
 
-        # --- Dla ofiar ---
+        # --- Generowanie nowych ofiar ---
         preys = [a for a in self.agents if a.role == 'prey']
-        prey_pairs = []
-        for i, agent1 in enumerate(preys):
-            for agent2 in preys[i + 1:]:
-                x1, y1 = agent1.get_position()
-                x2, y2 = agent2.get_position()
-                distance = abs(x1 - x2) + abs(y1 - y2)
-                if distance <= self.mating_scope:
-                    prey_pairs.append((agent1, agent2))
-        for parent1, parent2 in prey_pairs:
-            r = random.uniform(0, 1)
-            new_speed = r * parent1.speed + (1 - r) * parent2.speed
-            new_resilience = r * parent1.resilience + (1 - r) * parent2.resilience
-            if random.random() < self.mutation_chance:
-                new_speed += np.random.normal(0, self.mutation_std)
-            if random.random() < self.mutation_chance:
-                new_resilience += np.random.normal(0, self.mutation_std)
+        num_preys = len(preys)
+        new_preys = 0
+        if num_preys < self.max_num_preys:
+            new_preys = max(1, math.ceil(num_preys * self.p_prey))
+
+        for _ in range(new_preys):
+            if len(preys) >= 2:
+                parent1, parent2 = random.sample(preys, 2)
+                r = random.uniform(0, 1)
+                new_speed = r * parent1.speed + (1 - r) * parent2.speed
+                new_resilience = r * parent1.resilience + (1 - r) * parent2.resilience
+                if random.random() < self.mutation_chance:
+                    new_speed += np.random.normal(0, self.mutation_std)
+                if random.random() < self.mutation_chance:
+                    new_resilience += np.random.normal(0, self.mutation_std)
+            else:
+                new_speed = random.uniform(0.5, 1.5)
+                new_resilience = random.uniform(0.5, 1.5)
+
             prey_id = f"py_{len([a for a in self.agents if a.role == 'prey'])}"
             while True:
-                x = random.randint(0, self.grid_size[0] - 1)
-                y = random.randint(0, self.grid_size[1] - 1)
+                x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
                     new_prey = Agent(prey_id, 'prey', (x, y))
                     new_prey.health = 1
                     new_prey.speed = new_speed
                     new_prey.resilience = new_resilience
-                    new_prey.attack = 0
+                    new_prey.attack = 0  # Ofiary nie posiadają ataku
                     self.agents.append(new_prey)
                     self.grid[x, y] = new_prey
                     break
