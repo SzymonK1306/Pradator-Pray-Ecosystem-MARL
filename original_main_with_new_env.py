@@ -14,7 +14,7 @@ import torch.optim as optim
 from agent import Agent
 from model import DDQNLSTM
 
-from predator_prey_env import PredatorPreyEnvType2
+from env_type2 import PredatorPreyEnvType2
 
 def batchify(data, batch_size):
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]

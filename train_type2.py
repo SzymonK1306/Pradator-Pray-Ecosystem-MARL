@@ -4,7 +4,7 @@ import csv
 import random
 import matplotlib.pyplot as plt
 from collections import deque
-from predator_prey_env import PredatorPreyEnvType2
+from env_type2 import PredatorPreyEnvType2
 from model import DDQNLSTM
 
 
@@ -110,7 +110,6 @@ for i in range(EPOCHS):
 
     new_obs, rewards, dones = env.step(actions)
     num_matings = rewards.get('mating_count', 0)
-    # print(f"Number of matings this iteration: {num_matings}")
 
     num_predators = len([a for a in env.agents if a.role == "predator"])
     num_preys = len([a for a in env.agents if a.role == "prey"])
@@ -122,27 +121,6 @@ for i in range(EPOCHS):
 
     if num_predators + num_preys < len(env.agents):
         print("Reproduction occurred!")
-
-    # for agent_id in actions.keys():
-    #     if dones[agent_id]:
-    #         new_obs_to_save = torch.zeros_like(torch.tensor(obs[agent_id], dtype=torch.float32))
-    #     else:
-    #         new_obs_to_save = new_obs[agent_id]
-    #
-    #     experience = (
-    #         obs[agent_id],
-    #         actions[agent_id],
-    #         rewards[agent_id],
-    #         dones[agent_id],
-    #         new_obs_to_save,
-    #         hidden_states[agent_id],
-    #         new_hidden_states[agent_id]
-    #     )
-    #
-    #     if agent_id.startswith('pr'):
-    #         predator_replay_buffer.append(experience)
-    #     else:
-    #         prey_replay_buffer.append(experience)
 
     if not USE_RANDOM_ACTIONS:
 

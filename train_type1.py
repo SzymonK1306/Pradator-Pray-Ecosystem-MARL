@@ -1,20 +1,15 @@
-import math
+import csv
+import random
 import sys
 import unittest
 from collections import deque
 
-from pettingzoo.utils.env import ParallelEnv
-from pettingzoo.utils import wrappers
-import numpy as np
-import random
-import csv
 import torch
-import torch.optim as optim
+from torch import optim
 
-from agent import Agent
+from env_type1 import PredatorPreyEnv
 from model import DDQNLSTM
 
-from env_type3 import PredatorPreyEnvType3
 
 def batchify(data, batch_size):
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
@@ -25,18 +20,6 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 
     mini_batches = batchify(batch, BATCH_SIZE)
     for minibatch in mini_batches:
-        # Prepare batches for training
-        # obs_batch = torch.tensor([exp[0] for exp in minibatch], dtype=torch.float32)
-        # action_batch = torch.tensor([exp[1] for exp in minibatch], dtype=torch.long)
-        # reward_batch = torch.tensor([exp[2] for exp in minibatch], dtype=torch.float32)
-        # done_batch = torch.tensor([exp[3] for exp in minibatch], dtype=torch.float32)
-        # next_obs_batch = torch.empty(len(minibatch), 4, 11, 11, dtype=torch.float32)  # Allocate an empty tensor
-        # for ii, exp in enumerate(minibatch):
-        #     next_obs_batch[ii] = torch.tensor(exp[4])
-        # # next_obs_batch = torch.tensor([exp[4] for exp in minibatch], dtype=torch.float32)
-        # hidden_state_batch = [exp[5] for exp in minibatch]
-        # new_hidden_state_batch = [exp[6] for exp in minibatch]
-
         # Compute target Q-values and optimize
         q_values_batch = []
         target_q_values = []
@@ -53,12 +36,6 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
         target_q_values = torch.stack(target_q_values)
 
         q_values_batch = torch.stack((q_values_batch))
-        # Compute current Q-values and loss
-        # if all(x is None for x in hidden_state_batch):
-        #     q_values, _ = agent_policy_model(obs_batch)
-        # else:
-        #     q_values, _ = agent_policy_model(obs_batch, hidden_state_batch)
-        # q_values = q_values.gather(1, action_batch.unsqueeze(1)).squeeze()
         loss = torch.nn.functional.mse_loss(q_values_batch, target_q_values)
 
         # Optimize the shared network
@@ -69,17 +46,16 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 
     if i % UPDATE_FREQ == 0:
         agent_target_model.load_state_dict(agent_policy_model.state_dict())
+        torch.save(predator_target_model.state_dict(), "models/predator_target_model.pth")
+        torch.save(predator_policy_model.state_dict(), "models/predator_policy_model.pth")
 
-        torch.save(predator_target_model.state_dict(), "predator_target_model.pth")
-        torch.save(predator_policy_model.state_dict(), "predator_policy_model.pth")
-        torch.save(prey_target_model.state_dict(), "prey_target_model.pth")
-        torch.save(prey_policy_model.state_dict(), "prey_policy_model.pth")
-
+        torch.save(prey_target_model.state_dict(), "models/prey_target_model.pth")
+        torch.save(prey_policy_model.state_dict(), "models/prey_policy_model.pth")
     agent_replay_buffer.clear()
 # Wrapping the environment - Can be added in the future
 
 def env_creator():
-    env = PredatorPreyEnvType3((600, 600), 25, 100, 10000, 5, 1.0)
+    env = PredatorPreyEnv((600, 600), 1000, 1000, 1000, 5, 1.0)
     return env
 
 RUN_TESTS_BEFORE = False
@@ -119,17 +95,17 @@ if __name__ == "__main__":
     obs = env.reset()
     # env.render()
 
-    csv_file = 'output_ENV_1_more_hunger_ceil.csv'
+    csv_file = 'Eval_output_ENV_1_more_hunger_ceil_more_reward_bigger_observation.csv'
     data = []
 
     predator_replay_buffer = deque()
     prey_replay_buffer = deque()
 
     # Models
-    predator_policy_model = DDQNLSTM((7, 11, 11), 4).to(device)
-    predator_target_model = DDQNLSTM((7, 11, 11), 4).to(device)
-    prey_policy_model = DDQNLSTM((7, 11, 11), 4).to(device)
-    prey_target_model = DDQNLSTM((7, 11, 11), 4).to(device)
+    predator_policy_model = DDQNLSTM((4, 51, 51), 4).to(device)
+    predator_target_model = DDQNLSTM((4, 51, 51), 4).to(device)
+    prey_policy_model = DDQNLSTM((4, 51, 51), 4).to(device)
+    prey_target_model = DDQNLSTM((4, 51, 51), 4).to(device)
 
     # Optimizers
     predator_optimizer = optim.Adam(predator_policy_model.parameters(), lr=LEARNING_RATE)
@@ -161,10 +137,6 @@ if __name__ == "__main__":
 
         new_obs, rewards, dones = env.step(actions)
 
-        # experiences["observations"].update(obs)
-        # experiences["actions"].update(actions)
-        # experiences["rewards"].update(rewards)
-        # experiences["dones"].update(dones)
         for agent_id in actions.keys():
             if dones[agent_id]:
                 new_obs_to_save = torch.zeros_like(torch.tensor(obs[agent_id], dtype=torch.float32)).to(device)  # Placeholder
@@ -184,7 +156,6 @@ if __name__ == "__main__":
             else:
                 prey_replay_buffer.append(experience)
 
-        # env.generate_new_agents()
         if len(predator_replay_buffer) >= BUFFER_SIZE:
             # Sample a minibatch and train (same as before)
             update_weights(predator_replay_buffer, predator_policy_model, predator_target_model, predator_optimizer, device)
@@ -199,43 +170,14 @@ if __name__ == "__main__":
 
         obs = new_obs
         hidden_state = new_hidden_states
-        #print(i, num_predators, num_preys)
-
-        predators = [a for a in env.agents if "predator" in a.role]
-        preys = [a for a in env.agents if "prey" in a.role]
-        num_predators = len(predators)
-        num_preys = len(preys)
-        avg_attack = np.mean([agent.attack for agent in predators]) if num_predators > 0 else 0
-        avg_speed_predators = np.mean([agent.speed for agent in predators]) if num_predators > 0 else 0
-        avg_resilience = np.mean([agent.resilience for agent in preys]) if num_preys > 0 else 0
-        avg_speed_preys = np.mean([agent.speed for agent in preys]) if num_preys > 0 else 0
-
-        if i % 10 == 0:
-            print(f'Epoch: {i}, Num predators: {num_predators}, Num preys: {num_preys}, avg attack: {avg_attack}, avg resiliencs: {avg_resilience}, prey speed: {avg_speed_preys},predator speed: {avg_speed_predators} ')
-
-
-
+        print(i, num_predators, num_preys)
         with open(csv_file, mode='a', newline='') as file:  # Open in append mode
             writer = csv.writer(file)
-            # writer.writerow([i, num_predators, num_preys])
-            writer.writerow([i, num_predators, num_preys, avg_attack, avg_speed_predators, avg_resilience, avg_speed_preys])
-
+            writer.writerow([i, num_predators, num_preys])
     torch.save(predator_target_model.state_dict(), "predator_target_model.pth")
     torch.save(predator_policy_model.state_dict(), "predator_policy_model.pth")
 
     torch.save(prey_target_model.state_dict(), "prey_target_model.pth")
     torch.save(prey_policy_model.state_dict(), "prey_policy_model.pth")
-        # env.render()
-
-    # with open(csv_file, mode='w', newline='') as file:
-    #     writer = csv.writer(file)
-    #
-    #     # Loop through each item in data
-    #     for row in data:
-    #         # Extract the last three elements
-    #         last_three = row[-3:]
-    #
-    #         # Write them to the CSV
-    #         writer.writerow(last_three)
 
 

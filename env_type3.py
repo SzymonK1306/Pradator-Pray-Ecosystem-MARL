@@ -2,44 +2,10 @@ import random
 import numpy as np
 import math
 from pettingzoo.utils.env import ParallelEnv
-
-
-# ------------------------------
-# Klasa Agent – podstawowa wersja
-# ------------------------------
-class Agent():
-    def __init__(self, id, role, position):
-        self.id = id  # Unikalne ID agenta
-        self.role = role
-        self.position = position
-
-        if role == 'predator':
-            self.health = random.uniform(0.5, 1)
-            self.speed = random.uniform(0.5, 1.5)
-            self.attack = random.uniform(0.5, 1.5)
-            self.resilience = 0  # Dla drapieżników nie jest używane
-        else:
-            self.health = 1
-            self.speed = random.uniform(0.5, 1.5)
-            self.resilience = random.uniform(0.5, 1.5)
-            self.attack = 0  # Ofiary nie posiadają atrybutu attack
-
-    def set_position(self, position):
-        self.position = position
-
-    def get_position(self):
-        return self.position
-
-    def get_random_action(self):
-        # Akcje: 1 = up, 2 = down, 3 = left, 4 = right
-        return random.choice([1, 2, 3, 4])
-
-    def add_health(self, health_gained):
-        self.health += health_gained
-
+from agent_type3 import AgentType3
 
 # ------------------------------
-# Środowisko typu 3 – generowanie nowych osobników tylko po znalezieniu pary w zasięgu reprodukcji
+# Environment 3 – Unique genetic features for each agent
 # ------------------------------
 class PredatorPreyEnvType3(ParallelEnv):
     def __init__(self,
@@ -49,26 +15,26 @@ class PredatorPreyEnvType3(ParallelEnv):
                  num_walls=500,
                  predator_scope=5,
                  health_gained=0.3,
-                 p_predator=0.003,  # dodany parametr prawdopodobieństwa dla drapieżników
-                 p_prey=0.006,  # dodany parametr prawdopodobieństwa dla ofiar
+                 health_penalty=0.01,
+                 p_predator=0.003,
+                 p_prey=0.006,
                  mating_scope=None,
                  mutation_chance=0.1,
                  mutation_std=1.0):
         """
-        Inicjalizacja środowiska typu 3.
-
-        Parametry:
-          - grid_size: rozmiar siatki (wysokość, szerokość)
-          - num_predators: początkowa liczba drapieżników
-          - num_prey: początkowa liczba ofiar
-          - num_walls: liczba ścian
-          - predator_scope: zasięg widzenia/poszukiwania (dla obserwacji)
-          - health_gained: przyrost zdrowia drapieżnika po skutecznym ataku
-          - p_predator: współczynnik generowania nowych drapieżników
-          - p_prey: współczynnik generowania nowych ofiar
-          - mating_scope: zakres reprodukcji (domyślnie taki sam jak predator_scope, jeśli nie podano)
-          - mutation_chance: prawdopodobieństwo mutacji przy recombinacji
-          - mutation_std: odchylenie standardowe rozkładu normalnego używanego przy mutacji
+          - Initializes the environment.
+          - grid_size: Tuple[int, int] - dimensions of the grid.
+          - num_predators: int - number of predator agents.
+          - num_prey: int - number of prey agents.
+          - num_walls: int - number of wall elements.
+          - predator_scope: int - range of predator, where preys are killed
+          - health_gained: float - value of health restored with killing a prey
+          - health_penalty: float - value of health losing by predator in each step
+          - p_predator: coefficient of generating new predators
+          - p_prey: coefficient of generating new prey
+          - mating_scope: reproduction range (defaults to the same as predator_scope if not provided)
+          - mutation_chance: probability of mutation during recombination
+          - mutation_std: standard deviation of the normal distribution used for mutation
         """
         self.grid_size = grid_size
         self.num_predators = num_predators
@@ -76,16 +42,13 @@ class PredatorPreyEnvType3(ParallelEnv):
         self.num_walls = num_walls
         self.predator_scope = predator_scope
         self.health_gained = health_gained
+        self.health_penalty = health_penalty
 
         self.max_num_predators = 10000
         self.max_num_preys = 10000
 
-        # Ustawienie prawdopodobieństwa generacji nowych agentów
         self.p_predator = p_predator
         self.p_prey = p_prey
-
-        # Jeśli mating_scope nie został podany, ustawiamy go na predator_scope
-        # self.mating_scope = mating_scope if mating_scope is not None else predator_scope
 
         self.mutation_chance = mutation_chance
         self.mutation_std = mutation_std
@@ -95,39 +58,39 @@ class PredatorPreyEnvType3(ParallelEnv):
         self.grid = np.zeros(self.grid_size, dtype=object)
 
     def reset(self):
-        """Resetuje środowisko oraz inicjalizuje agentów."""
+        """Resets the environment."""
         self.grid.fill(0)
         self.walls_positions.clear()
         self.agents = []
 
-        # Ustawianie ścian
+        # Create and place predators
         for _ in range(self.num_walls):
             while True:
                 x = random.randint(0, self.grid_size[0] - 1)
                 y = random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
-                    self.grid[x, y] = -1  # Reprezentacja ściany
+                    self.grid[x, y] = -1  # Wall
                     self.walls_positions.append((x, y))
                     break
 
-        # Inicjalizacja drapieżników
+        # Create and place predators
         for i in range(self.num_predators):
             while True:
                 x = random.randint(0, self.grid_size[0] - 1)
                 y = random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
-                    predator = Agent(f"pr_{i}", "predator", (x, y))
+                    predator = AgentType3(f"pr_{i}", "predator", (x, y))
                     self.agents.append(predator)
                     self.grid[x, y] = predator
                     break
 
-        # Inicjalizacja ofiar
+        # Create and place preys
         for i in range(self.num_prey):
             while True:
                 x = random.randint(0, self.grid_size[0] - 1)
                 y = random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
-                    prey = Agent(f"py_{i}", "prey", (x, y))
+                    prey = AgentType3(f"py_{i}", "prey", (x, y))
                     self.agents.append(prey)
                     self.grid[x, y] = prey
                     break
@@ -135,13 +98,13 @@ class PredatorPreyEnvType3(ParallelEnv):
         return {agent.id: self.get_observation(agent) for agent in self.agents}
 
     def agents_move(self, actions):
-        """Przemieszcza agentów wg zadanych akcji."""
+        """Make a move of each agent"""
         new_positions = {}
         for agent in self.agents:
             x, y = agent.get_position()
             new_x, new_y = x, y
 
-            # Pobieramy akcję – jeśli nie podano, wybieramy losowo
+            # random actions for now
             action = actions.get(agent.id, agent.get_random_action())
             if action == 1:  # up
                 new_x = (x - 1) % self.grid_size[0]
@@ -152,13 +115,13 @@ class PredatorPreyEnvType3(ParallelEnv):
             elif action == 4:  # right
                 new_y = (y + 1) % self.grid_size[1]
 
-            # Jeżeli docelowa komórka jest pusta, przechodzimy do niej
+            # Update empty cell
             if self.grid[new_x, new_y] == 0:
                 new_positions[agent.id] = (new_x, new_y)
             else:
                 new_positions[agent.id] = (x, y)
 
-        # Czyszczenie siatki – zachowujemy ściany
+        # Update grid and agent positions
         self.grid.fill(0)
         for wx, wy in self.walls_positions:
             self.grid[wx, wy] = -1
@@ -170,15 +133,15 @@ class PredatorPreyEnvType3(ParallelEnv):
 
     def get_observation(self, agent):
         """
-        Zwraca lokalną obserwację (7 kanałów):
-          0: warstwa ścian,
-          1: warstwa drapieżników,
-          2: warstwa ofiar,
-          3: poziom health,
-          4: wartość attack (dla drapieżników; w innym przypadku 0),
-          5: wartość resilience (dla ofiar; w innym przypadku 0),
-          6: wartość speed.
-        Wielkość obserwacji: (2*predator_scope+1, 2*predator_scope+1)
+        Returns a local observation (7 channels):
+          0: wall layer,
+          1: predator layer,
+          2: prey layer,
+          3: health level,
+          4: attack value (for predators; otherwise 0),
+          5: resilience value (for prey; otherwise 0),
+          6: speed value.
+        Observation size: (5*predator_scope+1, 5*predator_scope+1, 4)
         """
         ax, ay = agent.get_position()
         size = self.predator_scope * 2 + 1
@@ -191,15 +154,15 @@ class PredatorPreyEnvType3(ParallelEnv):
         resilience_layer = np.zeros((size, size), dtype=float)
         speed_layer = np.zeros((size, size), dtype=float)
 
-        for dx in range(-self.predator_scope, self.predator_scope + 1):
-            for dy in range(-self.predator_scope, self.predator_scope + 1):
+        for dx in range(-5 * self.predator_scope, 5 * self.predator_scope + 1):
+            for dy in range(-5 * self.predator_scope, 5 * self.predator_scope + 1):
                 nx = (ax + dx) % self.grid_size[0]
                 ny = (ay + dy) % self.grid_size[1]
                 local_x, local_y = dx + self.predator_scope, dy + self.predator_scope
 
                 if self.grid[nx, ny] == -1:
                     wall_layer[local_x, local_y] = 1
-                elif isinstance(self.grid[nx, ny], Agent):
+                elif isinstance(self.grid[nx, ny], AgentType3):
                     other = self.grid[nx, ny]
                     if other.role == 'predator':
                         predator_layer[local_x, local_y] = 1
@@ -223,9 +186,9 @@ class PredatorPreyEnvType3(ParallelEnv):
 
     def hunting(self, rewards, dones):
         """
-        Drapieżniki szukają najbliższej ofiary (w obrębie predator_scope).
-        Wszystkim drapieżnikom, które zaatakowały tę samą ofiarę, przypisywana jest część
-        nagrody 1, jeśli suma ich attack powoduje zmniejszenie resilience ofiary do 0 lub mniej.
+        Predators search for the nearest prey (within predator_scope).
+        All predators that attacked the same prey are assigned a share of the reward of 1,
+        provided that the sum of their attack reduces the prey's resilience to 0 or below.
         """
         prey_attacks = {}
         for predator in [a for a in self.agents if a.role == 'predator']:
@@ -238,7 +201,7 @@ class PredatorPreyEnvType3(ParallelEnv):
                         continue
                     nx = (px + dx) % self.grid_size[0]
                     ny = (py + dy) % self.grid_size[1]
-                    if isinstance(self.grid[nx, ny], Agent):
+                    if isinstance(self.grid[nx, ny], AgentType3):
                         other = self.grid[nx, ny]
                         if other.role == 'prey':
                             distance = abs(dx) + abs(dy)
@@ -265,9 +228,9 @@ class PredatorPreyEnvType3(ParallelEnv):
         return rewards, dones
 
     def predator_hunger(self, dones):
-        """Zmniejsza zdrowie drapieżników (symulacja głodu) i usuwa te, które umierają."""
+        """Decrease predator health and remove dead predators"""
         for predator in list(a for a in self.agents if a.role == 'predator'):
-            predator.add_health(-0.01)
+            predator.add_health(-self.health_penalty)
             if predator.health <= 0:
                 x, y = predator.get_position()
                 self.agents.remove(predator)
@@ -277,50 +240,56 @@ class PredatorPreyEnvType3(ParallelEnv):
 
     def generate_new_agents(self):
         """
-        Generuje nowych agentów na podstawie równania:
-             N_new_agent = max(1, ceil(N_agent * p_agent))
-        Dla drapieżników łączone są parametry: speed oraz attack.
-        Dla ofiar łączone są parametry: speed oraz resilience.
-        Parametry nowych agentów są wynikiem recombinacji (z potencjalną mutacją) parametrów dwóch losowo dobranych rodziców.
+        Generates new agents based on the equation:
+        N_new_agent = max(1, ceil(N_agent * p_agent))
+
+        For predators, the combined parameters are speed and attack.
+        For prey, the combined parameters are speed and resilience.
+        The parameters of new agents result from the recombination
+        (with potential mutation) of the parameters of two randomly
+        selected parents.
         """
-        # --- Generowanie nowych drapieżników ---
+        # Calculate the number of new predators and prey
         predators = [a for a in self.agents if a.role == 'predator']
         num_predators = len(predators)
         new_predators = 0
         if num_predators < self.max_num_predators:
             new_predators = max(1, math.ceil(num_predators * self.p_predator))
 
+        # Add new predators
         for _ in range(new_predators):
             if len(predators) >= 2:
                 parent1, parent2 = random.sample(predators, 2)
                 r = random.uniform(0, 1)
                 new_speed = r * parent1.speed + (1 - r) * parent2.speed
                 new_attack = r * parent1.attack + (1 - r) * parent2.attack
-                # Mutacja
+                # Mutation
                 if random.random() < self.mutation_chance:
                     new_speed += np.random.normal(0, self.mutation_std)
                 if random.random() < self.mutation_chance:
                     new_attack += np.random.normal(0, self.mutation_std)
             else:
-                # W przypadku, gdy nie ma dwóch rodziców, inicjalizujemy losowo
+                #
+                # In cases where two parents are not available, agents are initialized randomly
                 new_speed = random.uniform(0.5, 1.5)
                 new_attack = random.uniform(0.5, 1.5)
 
             predator_id = f"pr_{len([a for a in self.agents if a.role == 'predator'])}"
-            # Szukamy losowej, wolnej pozycji na siatce
+            #
+            # We search for a random, free position on the grid.
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
-                    new_pred = Agent(predator_id, 'predator', (x, y))
+                    new_pred = AgentType3(predator_id, 'predator', (x, y))
                     new_pred.health = random.uniform(0.5, 1)
                     new_pred.speed = new_speed
                     new_pred.attack = new_attack
-                    new_pred.resilience = 0  # Dla drapieżników resilience nie jest używane
+                    new_pred.resilience = 0  # For predators, resilience is not used.
                     self.agents.append(new_pred)
                     self.grid[x, y] = new_pred
                     break
 
-        # --- Generowanie nowych ofiar ---
+        # --- Generating new preys ---
         preys = [a for a in self.agents if a.role == 'prey']
         num_preys = len(preys)
         new_preys = 0
@@ -345,23 +314,23 @@ class PredatorPreyEnvType3(ParallelEnv):
             while True:
                 x, y = random.randint(0, self.grid_size[0] - 1), random.randint(0, self.grid_size[1] - 1)
                 if self.grid[x, y] == 0:
-                    new_prey = Agent(prey_id, 'prey', (x, y))
+                    new_prey = AgentType3(prey_id, 'prey', (x, y))
                     new_prey.health = 1
                     new_prey.speed = new_speed
                     new_prey.resilience = new_resilience
-                    new_prey.attack = 0  # Ofiary nie posiadają ataku
+                    new_prey.attack = 0  # For preys, attack is not used
                     self.agents.append(new_prey)
                     self.grid[x, y] = new_prey
                     break
 
     def step(self, actions):
         """
-        Wykonuje jeden krok symulacji:
-          1. Ruch agentów
-          2. Atak drapieżników (hunting)
-          3. Spadek zdrowia (głód) drapieżników
-          4. Generowanie nowych agentów (tylko jeśli istnieją pary w zasięgu reprodukcji)
-          5. Aktualizacja obserwacji
+        Performs one simulation step:
+          1. Movement of agents
+          2. Predator attack (hunting)
+          3. Health decrease (hunger) for predators
+          4. Generation of new agents (only if there are pairs within the reproduction range)
+          5. Observation update
         """
         rewards = {agent.id: 0 for agent in self.agents}
         dones = {agent.id: False for agent in self.agents}
@@ -375,17 +344,17 @@ class PredatorPreyEnvType3(ParallelEnv):
 
     def render(self):
         """
-        Renderuje środowisko w konsoli:
-          - '#' reprezentuje ścianę,
-          - 'X' reprezentuje drapieżnika,
-          - 'O' reprezentuje ofiarę.
+        Renders the environment in the console.:
+          - '#' representing wall,
+          - 'X' representing predator,
+          - 'O' representing prey.
         """
         render_grid = np.full(self.grid.shape, '.')
         for i in range(self.grid_size[0]):
             for j in range(self.grid_size[1]):
                 if self.grid[i, j] == -1:
                     render_grid[i, j] = '#'
-                elif isinstance(self.grid[i, j], Agent):
+                elif isinstance(self.grid[i, j], AgentType3):
                     if self.grid[i, j].role == 'predator':
                         render_grid[i, j] = 'X'
                     elif self.grid[i, j].role == 'prey':

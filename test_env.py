@@ -3,7 +3,7 @@ import random
 from unittest.mock import patch
 
 from agent import Agent
-from main import PredatorPreyEnv
+from train_type1 import PredatorPreyEnv
 
 class TestPredatorPreyEnv(unittest.TestCase):
     def setUp(self):
