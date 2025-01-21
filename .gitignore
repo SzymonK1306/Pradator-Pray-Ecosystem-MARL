@@ -1,3 +1,9 @@
 .venv
 .idea
 __pycache__/
+*.csv
+predator_policy_model_Type2.pth
+predator_target_model_Type2.pth
+prey_policy_model_Type2.pth
+prey_target_model_Type2.pth
+*.pth
