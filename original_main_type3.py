@@ -199,10 +199,27 @@ if __name__ == "__main__":
 
         obs = new_obs
         hidden_state = new_hidden_states
-        print(i, num_predators, num_preys)
+        #print(i, num_predators, num_preys)
+
+        predators = [a for a in env.agents if "predator" in a.role]
+        preys = [a for a in env.agents if "prey" in a.role]
+        num_predators = len(predators)
+        num_preys = len(preys)
+        avg_attack = np.mean([agent.attack for agent in predators]) if num_predators > 0 else 0
+        avg_speed_predators = np.mean([agent.speed for agent in predators]) if num_predators > 0 else 0
+        avg_resilience = np.mean([agent.resilience for agent in preys]) if num_preys > 0 else 0
+        avg_speed_preys = np.mean([agent.speed for agent in preys]) if num_preys > 0 else 0
+
+        if i % 10 == 0:
+            print(f'Epoch: {i}, Num predators: {num_predators}, Num preys: {num_preys}, avg attack: {avg_attack}, avg resiliencs: {avg_resilience}, prey speed: {avg_speed_preys},predator speed: {avg_speed_predators} ')
+
+
+
         with open(csv_file, mode='a', newline='') as file:  # Open in append mode
             writer = csv.writer(file)
-            writer.writerow([i, num_predators, num_preys])
+            # writer.writerow([i, num_predators, num_preys])
+            writer.writerow([i, num_predators, num_preys, avg_attack, avg_speed_predators, avg_resilience, avg_speed_preys])
+
     torch.save(predator_target_model.state_dict(), "predator_target_model.pth")
     torch.save(predator_policy_model.state_dict(), "predator_policy_model.pth")
 
