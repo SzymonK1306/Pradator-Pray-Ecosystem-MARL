@@ -3,9 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class DDQNLSTM(nn.Module):
-    def __init__(self, input_shape, n_actions):
-        super(DDQNLSTM, self).__init__()
+class ActorCriticModel(nn.Module):
+    def __init__(self, input_shape, n_actions, hidden_dim=256):
+        super(ActorCriticModel, self).__init__()
+
+        self.hidden_dim = hidden_dim
 
         # Convolutional layers with padding to preserve dimensions
         self.conv1 = nn.Conv2d(in_channels=input_shape[0], out_channels=32, kernel_size=4, stride=4)
@@ -17,7 +19,8 @@ class DDQNLSTM(nn.Module):
 
         # Fully connected layers for state-value and advantage-value streams
         self.fc_output_layer = nn.Linear(256, 128)
-        self.output_layer = nn.Linear(128, n_actions)
+        self.policy_head = nn.Linear(128, n_actions)
+        self.value_head = nn.Linear(128, 1)
 
     def forward(self, x, hidden_state=None):
         batch_size = x.size(0)
@@ -41,6 +44,7 @@ class DDQNLSTM(nn.Module):
 
         # State-value stream
         state = F.relu(self.fc_output_layer(x))
-        output = self.output_layer(state)
+        output = self.policy_head(state)
+        value = self.value_head(state)
 
-        return output, hidden_state
+        return output, value, hidden_state
