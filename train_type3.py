@@ -25,18 +25,6 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
 
     mini_batches = batchify(batch, BATCH_SIZE)
     for minibatch in mini_batches:
-        # Prepare batches for training
-        # obs_batch = torch.tensor([exp[0] for exp in minibatch], dtype=torch.float32)
-        # action_batch = torch.tensor([exp[1] for exp in minibatch], dtype=torch.long)
-        # reward_batch = torch.tensor([exp[2] for exp in minibatch], dtype=torch.float32)
-        # done_batch = torch.tensor([exp[3] for exp in minibatch], dtype=torch.float32)
-        # next_obs_batch = torch.empty(len(minibatch), 4, 11, 11, dtype=torch.float32)  # Allocate an empty tensor
-        # for ii, exp in enumerate(minibatch):
-        #     next_obs_batch[ii] = torch.tensor(exp[4])
-        # # next_obs_batch = torch.tensor([exp[4] for exp in minibatch], dtype=torch.float32)
-        # hidden_state_batch = [exp[5] for exp in minibatch]
-        # new_hidden_state_batch = [exp[6] for exp in minibatch]
-
         # Compute target Q-values and optimize
         q_values_batch = []
         target_q_values = []
@@ -53,12 +41,6 @@ def update_weights(agent_replay_buffer, agent_policy_model, agent_target_model, 
         target_q_values = torch.stack(target_q_values)
 
         q_values_batch = torch.stack((q_values_batch))
-        # Compute current Q-values and loss
-        # if all(x is None for x in hidden_state_batch):
-        #     q_values, _ = agent_policy_model(obs_batch)
-        # else:
-        #     q_values, _ = agent_policy_model(obs_batch, hidden_state_batch)
-        # q_values = q_values.gather(1, action_batch.unsqueeze(1)).squeeze()
         loss = torch.nn.functional.mse_loss(q_values_batch, target_q_values)
 
         # Optimize the shared network
@@ -161,10 +143,6 @@ if __name__ == "__main__":
 
         new_obs, rewards, dones = env.step(actions)
 
-        # experiences["observations"].update(obs)
-        # experiences["actions"].update(actions)
-        # experiences["rewards"].update(rewards)
-        # experiences["dones"].update(dones)
         for agent_id in actions.keys():
             if dones[agent_id]:
                 new_obs_to_save = torch.zeros_like(torch.tensor(obs[agent_id], dtype=torch.float32)).to(device)  # Placeholder
@@ -227,15 +205,5 @@ if __name__ == "__main__":
     torch.save(prey_policy_model.state_dict(), "prey_policy_model.pth")
         # env.render()
 
-    # with open(csv_file, mode='w', newline='') as file:
-    #     writer = csv.writer(file)
-    #
-    #     # Loop through each item in data
-    #     for row in data:
-    #         # Extract the last three elements
-    #         last_three = row[-3:]
-    #
-    #         # Write them to the CSV
-    #         writer.writerow(last_three)
 
 
