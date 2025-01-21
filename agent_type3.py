@@ -24,7 +24,7 @@ class AgentType3():
         return self.position
 
     def get_random_action(self):
-        # Akcje: 1 = up, 2 = down, 3 = left, 4 = right
+        # Actions: 1 = up, 2 = down, 3 = left, 4 = right
         return random.choice([1, 2, 3, 4])
 
     def add_health(self, health_gained):

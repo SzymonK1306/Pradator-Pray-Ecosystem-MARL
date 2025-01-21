@@ -104,7 +104,6 @@ class PredatorPreyEnvType3(ParallelEnv):
             x, y = agent.get_position()
             new_x, new_y = x, y
 
-            # random actions for now
             action = actions.get(agent.id, agent.get_random_action())
             if action == 1:  # up
                 new_x = (x - 1) % self.grid_size[0]
@@ -141,7 +140,7 @@ class PredatorPreyEnvType3(ParallelEnv):
           4: attack value (for predators; otherwise 0),
           5: resilience value (for prey; otherwise 0),
           6: speed value.
-        Observation size: (5*predator_scope+1, 5*predator_scope+1, 4)
+        Observation size: (5*predator_scope+1, 5*predator_scope+1, 7)
         """
         ax, ay = agent.get_position()
         size = self.predator_scope * 2 + 1
